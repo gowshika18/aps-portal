@@ -1,0 +1,19 @@
+# Backend dependencies & build
+node_modules/
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local embedded Postgres data
+.pgdata/
+
+# Logs
+logs/
+*.log
+
+# Temp files
+*.tmp
+*.bak

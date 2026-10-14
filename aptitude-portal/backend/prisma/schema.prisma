@@ -1,0 +1,306 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  STAFF
+}
+
+enum TopicCategory {
+  QUANTITATIVE
+  LOGICAL
+}
+
+enum AttemptStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
+model User {
+  id           String         @id @default(uuid())
+  username     String         @unique // rollNumber for students, staffId for staff
+  passwordHash String
+  role         Role
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  lastLoginAt  DateTime?
+
+  student        Student?
+  staff          Staff?
+  sessions       LoginSession[]
+  notifications  Notification[]
+
+  @@map("users")
+}
+
+model Student {
+  id         String        @id @default(uuid())
+  userId     String        @unique
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rollNumber String        @unique
+  name       String
+  email      String
+  department String
+  year       Int
+  section    String
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  attempts   TestAttempt[]
+
+  @@map("students")
+}
+
+model Staff {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staffId    String   @unique
+  name       String
+  email      String
+  department String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  auditLogs  AuditLog[]
+
+  @@map("staff")
+}
+
+model LoginSession {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loginAt    DateTime  @default(now())
+  logoutAt   DateTime?
+  lastSeenAt DateTime  @default(now())
+  isActive   Boolean   @default(true)
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("login_sessions")
+}
+
+model Topic {
+  id           String        @id @default(uuid())
+  name         String        @unique
+  category     TopicCategory
+  displayOrder Int
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  tests        Test[]
+
+  @@map("topics")
+}
+
+model Test {
+  id            String        @id @default(uuid())
+  topicId       String
+  topic         Topic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  testNumber    Int           // 1, 2, or 3
+  title         String
+  questionCount Int           @default(20)
+  durationSeconds Int         @default(1200) // 20 minutes
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  questions     Question[]
+  attempts      TestAttempt[]
+
+  @@unique([topicId, testNumber])
+  @@index([topicId])
+  @@map("tests")
+}
+
+model Question {
+  id             String   @id @default(uuid())
+  testId         String
+  test           Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  questionNumber Int
+  questionText   String   @db.Text
+  optionA        String   @db.Text
+  optionB        String   @db.Text
+  optionC        String   @db.Text
+  optionD        String   @db.Text
+  correctOption  String   // 'A' | 'B' | 'C' | 'D'
+  explanation    String   @db.Text
+  difficulty     String   @default("HARD")
+  marks          Int      @default(1)
+  isActive       Boolean  @default(true)
+
+  category       String?
+  subTopic       String?
+  concept        String?
+  sourceType     String   @default("ORIGINAL")
+
+  // Duplicate detection / versioning
+  isDuplicate    Boolean  @default(false)
+  duplicateOfId  String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  answers        Answer[]
+  versions       QuestionVersion[]
+
+  @@unique([testId, questionNumber])
+  @@index([testId])
+  @@index([isActive])
+  @@map("questions")
+}
+
+// Immutable snapshot of question at time of any edit — preserves historical accuracy
+model QuestionVersion {
+  id             String   @id @default(uuid())
+  questionId     String
+  question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versionNumber  Int
+  questionText   String   @db.Text
+  optionA        String   @db.Text
+  optionB        String   @db.Text
+  optionC        String   @db.Text
+  optionD        String   @db.Text
+  correctOption  String
+  explanation    String   @db.Text
+  difficulty     String
+  marks          Int
+  editedBy       String   // staffId or username
+  editReason     String?
+  createdAt      DateTime @default(now())
+
+  @@index([questionId])
+  @@map("question_versions")
+}
+
+model TestAttempt {
+  id               String        @id @default(uuid())
+  studentId        String
+  student          Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  testId           String
+  test             Test          @relation(fields: [testId], references: [id], onDelete: Cascade)
+  attemptNumber    Int           @default(1)
+  isRetest         Boolean       @default(false)
+  startedAt        DateTime      @default(now())
+  submittedAt      DateTime?
+  status           AttemptStatus @default(IN_PROGRESS)
+  attemptedCount   Int           @default(0)
+  unattemptedCount Int           @default(20)
+  correctCount     Int           @default(0)
+  wrongCount       Int           @default(0)
+  score            Float         @default(0)
+  accuracy         Float         @default(0)
+  timeTakenSeconds Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  answers          Answer[]
+
+  @@unique([studentId, testId, attemptNumber])
+  @@index([studentId])
+  @@index([testId])
+  @@index([status])
+  @@index([submittedAt])
+  @@map("test_attempts")
+}
+
+model Answer {
+  id             String      @id @default(uuid())
+  attemptId      String
+  attempt        TestAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption String      // 'A' | 'B' | 'C' | 'D'
+  isCorrect      Boolean     @default(false)
+  answeredAt     DateTime    @default(now())
+  timeSpentSeconds Int?      // time spent on this question (approximate)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+  @@map("answers")
+}
+
+// Staff audit log for all administrative actions
+model AuditLog {
+  id         String   @id @default(uuid())
+  staffId    String
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  action     String   // QUESTION_CREATED, QUESTION_UPDATED, TEST_UPDATED, etc.
+  entityType String   // Question, Test, Topic, Student, Setting
+  entityId   String?
+  metadata   Json?    // Non-sensitive additional context
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([staffId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// System-wide announcements from staff
+model Announcement {
+  id          String   @id @default(uuid())
+  title       String
+  message     String   @db.Text
+  isActive    Boolean  @default(true)
+  startsAt    DateTime @default(now())
+  endsAt      DateTime?
+  createdBy   String   // staffId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([endsAt])
+  @@map("announcements")
+}
+
+// Per-user notifications
+model Notification {
+  id        String             @id @default(uuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String             @default("INFO") // INFO, SUCCESS, WARNING, SYSTEM
+  status    NotificationStatus @default(UNREAD)
+  link      String?
+  createdAt DateTime           @default(now())
+  readAt    DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@map("notifications")
+}
+
+// Configurable system settings stored in DB
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedBy   String?  // staffId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_settings")
+}

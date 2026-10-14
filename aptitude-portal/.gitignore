@@ -1,0 +1,54 @@
+# ========================================================
+# Git Ignore - College Placement Aptitude Portal
+# ========================================================
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables & secrets (CRITICAL: Never commit .env)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.cert
+
+# Production build outputs
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Local database storage & cache
+.pgdata/
+*.sqlite
+*.sqlite-journal
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Backups & temporary archives
+backups/*.sql
+backups/*.dump
+backups/*.tar.gz
+*.tmp
+*.bak
+
+# OS & Editor generated files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj

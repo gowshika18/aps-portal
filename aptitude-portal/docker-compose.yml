@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: aptitude-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres_secure_password}
+      POSTGRES_DB: aptitude_portal
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Backend REST API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aptitude-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres_secure_password}@postgres:5432/aptitude_portal?schema=public
+      JWT_SECRET: ${JWT_SECRET:-production-super-secret-jwt-key-min-32-chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-production-super-secret-refresh-key-min-32-chars}
+      PORT: 5000
+      NODE_ENV: production
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    ports:
+      - "5000:5000"
+
+  # 3. Frontend Web Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:5000/api}
+    container_name: aptitude-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  pgdata:

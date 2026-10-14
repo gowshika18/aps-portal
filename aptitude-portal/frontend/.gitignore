@@ -1,0 +1,13 @@
+# Frontend dependencies & build
+node_modules/
+dist/
+.vite/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
